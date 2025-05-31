@@ -46,8 +46,8 @@ int n_sets, n_ways;
 int tot = 0; // Total number of cache operations
 int parseInput(){
     char filepath[sizeof(tracefile) + 9]; // room for "./traces/" prefix
-    snprintf(filepath, sizeof(filepath), "./traces/%s", tracefile);
-    
+    // snprintf(filepath, sizeof(filepath), "./traces/%s", tracefile);
+    strcpy(filepath, tracefile);
     FILE *fp = fopen(filepath, "r");
     if (fp == NULL) {
         fprintf(stderr, "Error opening trace file '%s'\n", filepath);
