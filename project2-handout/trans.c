@@ -1,4 +1,5 @@
 //523031910732 杨佩尧
+//姚明哲 523031910408
 
 /*
  * trans.c - Matrix transpose B = A^T
@@ -30,7 +31,7 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N]) {
     // block_i is temp0
     // block_j is temp1
 
-    if (N == 32 || N == 61 || N == 67) {
+    if (N == 32) { // 32x32
         for (temp0 = 0; temp0 < N; temp0 += 8) {
             for (temp1 = 0; temp1 < M; temp1 += 8) {
                 for (i = temp0; i < temp0 + 8 && i < N; i++) {
@@ -48,7 +49,7 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N]) {
                 }
             }
         }
-    } else { // 64x64
+    } else if(N == 64) { // 64x64
         for (i = 0; i < N; i += 8) {
             for (j = 0; j < M; j += 8) {
                 // upper 4 rows
@@ -93,6 +94,29 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N]) {
                 for (temp0 = 4; temp0 < 8; temp0++) {
                     for (temp1 = 4; temp1 < 8; temp1++) {
                         B[j + temp1][i + temp0] = A[i + temp0][j + temp1];
+                    }
+                }
+            }
+        }
+    } else { // 61x67
+        for (temp0 = 0; temp0 < N; temp0 += 16) {
+            for (temp1 = 0; temp1 < M; temp1 += 16) {
+                temp2 = (temp0 == temp1);
+                for (i = temp0; i < temp0 + 16 && i < N; i++) {
+                    if(temp2 && i < M){
+                        for (j = temp1; j < temp1 + 16 && j < M; j++) {
+                            if (i != j)
+                                B[j][i] = A[i][j];
+                            else {
+                                diag = A[i][j];
+                                // Delay writing diagonal to reduce cache conflicts
+                            }
+                        }
+                        B[i][i] = diag;
+                    } else {
+                        for (j = temp1; j < temp1 + 16 && j < M; j++) {
+                            B[j][i] = A[i][j];
+                        }
                     }
                 }
             }
@@ -293,6 +317,86 @@ void trans_block_super_var(int M, int N, int A[N][M], int B[M][N]) {
     }
 }
 
+char trans_block_61x67_desc[] = "61*67 block transpose";
+void trans_block_61x67(int M, int N, int A[N][M], int B[M][N]) {
+    int i, j, k;
+    int temp0, temp1, temp2, temp3, temp4, temp5, temp6, temp7;
+
+    for (i = 0; i < 64; i += 8) {
+        for (j = 0; j < 56; j += 8) {
+            // upper 4 rows
+            for (k = 0; k < 4; k++) {
+                temp0 = A[i + k][j + 0];
+                temp1 = A[i + k][j + 1];
+                temp2 = A[i + k][j + 2];
+                temp3 = A[i + k][j + 3];
+                temp4 = A[i + k][j + 4];
+                temp5 = A[i + k][j + 5];
+                temp6 = A[i + k][j + 6];
+                temp7 = A[i + k][j + 7];
+                // write first half into B directly
+                B[j + 0][i + k] = temp0;
+                B[j + 1][i + k] = temp1;
+                B[j + 2][i + k] = temp2;
+                B[j + 3][i + k] = temp3;
+                // write second half in temporary positions in B
+                B[j + 0][i + k + 4] = temp4;
+                B[j + 1][i + k + 4] = temp5;
+                B[j + 2][i + k + 4] = temp6;
+                B[j + 3][i + k + 4] = temp7;
+            }
+            // lower 4 rows
+            for (k = 0; k < 4; k++) {
+                temp0 = B[j + k][i + 4];
+                temp1 = B[j + k][i + 5];
+                temp2 = B[j + k][i + 6];
+                temp3 = B[j + k][i + 7];
+                // write second half into B directly
+                B[j + k][i + 4] = A[i + 4][j + k];
+                B[j + k][i + 5] = A[i + 5][j + k];
+                B[j + k][i + 6] = A[i + 6][j + k];
+                B[j + k][i + 7] = A[i + 7][j + k];
+                // write first half in temporary positions in B
+                B[j + k + 4][i + 0] = temp0;
+                B[j + k + 4][i + 1] = temp1;
+                B[j + k + 4][i + 2] = temp2;
+                B[j + k + 4][i + 3] = temp3;
+            }
+            // the lower-right 4x4 block
+            for (temp0 = 4; temp0 < 8; temp0++) {
+                for (temp1 = 4; temp1 < 8; temp1++) {
+                    B[j + temp1][i + temp0] = A[i + temp0][j + temp1];
+                }
+            }
+        }
+    }
+    // i = 64, j = 56
+    // 0 <= i < 67, 56 <= j < 61
+    for(k = 0; k < N; k++){
+        temp0 = A[k][j + 0];
+        temp1 = A[k][j + 1];
+        temp2 = A[k][j + 2];
+        temp3 = A[k][j + 3];
+        temp4 = A[k][j + 4];
+
+        B[j + 0][k] = temp0;
+        B[j + 1][k] = temp1;
+        B[j + 2][k] = temp2;
+        B[j + 3][k] = temp3;
+        B[j + 4][k] = temp4;
+    }
+    // 64 <= i < 67, 0 <= j < 56
+    for(k = 0; k < j; k++){
+        temp0 = A[i + 0][k];
+        temp1 = A[i + 1][k];
+        temp2 = A[i + 2][k];
+
+        B[k][i + 0] = temp0;
+        B[k][i + 1] = temp1;
+        B[k][i + 2] = temp2;
+    }
+}
+
 /*
  * registerFunctions - This function registers your transpose
  *     functions with the driver.  At runtime, the driver will
@@ -314,6 +418,8 @@ void registerFunctions() {
     // registerTransFunction(trans_block_super, trans_block_super_desc);
 
     // registerTransFunction(trans_block_super_var, trans_block_super_var_desc);
+
+    // registerTransFunction(trans_block_61x67, trans_block_61x67_desc);
 
 }
 
